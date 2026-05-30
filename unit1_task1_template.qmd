@@ -60,7 +60,7 @@ df.filter(pl.col('name')=='Felisha').sort('year').head(1)\
 
 __What year had the most babies named 'David'? How many babies were named 'David' that year?__
 
-_The year with the most babies named 'David' was 1992, with 86,389 babies named 'David'._
+_The year with the most babies named 'David' was 1955, with 86,389 babies named 'David'._
 
 ```{python}
 # Q2
@@ -73,7 +73,7 @@ df.filter(pl.col('name')== 'David').sort('Total', descending=True).head(1)\
 
 __What year did your name hit its peak? How many babies were named your name in that year?__
 
-_The year with the most babies named 'Mitzi' was 1995, with 437 babies named 'Mitzi'._
+_The year with the most babies named 'Mitzi' was 1961, with 437 babies named 'Mitzi'._
 
 ```{python}
 # Q3

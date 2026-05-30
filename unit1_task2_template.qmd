@@ -1,0 +1,134 @@
+---
+title: "Client Report - What's in a Name?"
+subtitle: "Unit 1 Task 2"
+author: "Mitzi Vite"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: true
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+execute: 
+  warning: false
+    
+---
+
+```{python}
+import polars as pl
+import numpy as np
+from lets_plot import *
+
+LetsPlot.setup_html(isolated_frame=True)
+```
+
+```{python}
+# Learn morea about Code Cells: https://quarto.org/docs/reference/cells/cells-jupyter.html
+
+# Include and execute your code here
+df = pl.read_csv("https://posit.byui.edu/content/0d43d66f-d3b7-4c43-8c36-52e3ed69e7f1/names_year_csv.csv")
+# df.columns
+# df.head()
+```
+
+## QUESTION 1
+
+<!-- Make sure at least one of your charts includes reference marks!! -->
+
+__How does your name at your birth year compare to its use historically? Your must provide a chart. The years labels on your charts should not include a comma.__ 
+
+_In the chart below, we can see that the name Mitzi was much more popular in earlier decades than it was in my birth year, 2000. The graph shows that the name reached its highest popularity between the late 1950s and early 1970s. After that period, its usage gradually decreased over time, making it a less common name by the year I was born._
+
+```{python}
+# Q1
+mitzi = df.filter(pl.col('name') == 'Mitzi').select(['name', 'year', 'Total'])
+birth_year = 2000
+
+label_df = pl.DataFrame({
+    'year': [birth_year + 1],
+    'Total': [int(mitzi['Total'].max() * 0.9)],
+    'label': [f'My birth year ({birth_year})']
+})
+
+(
+    ggplot(mitzi, aes(x='year', y='Total'))
+    + geom_line(color='steelblue', size=1)
+    + geom_vline(xintercept=birth_year, linetype='dashed', color='red', size=1)
+    + geom_text(data=label_df, mapping=aes(x='year', y='Total', label='label'),
+                color='red', hjust=0)
+    + scale_x_continuous(format='d')
+    + labs(title="Historical Usage of the Name 'Mitzi'", x='Year', y='Count')
+    + theme_light()
+)
+```
+
+
+## QUESTION 2
+
+__Think of a unique name from a famous movie. Plot the usage of that name and see how changes line up with the movie release. Does it look like the movie had an effect on usage?__  
+
+_In the chart below, we can see that the name Elsa became more popular after the release of Frozen in 2013. The graph shows a noticeable increase in 2014, suggesting that the movie likely influenced the popularity of the name._
+
+```{python}
+# Q2
+famous_name = df.filter(pl.col('name')== 'Elsa').select(['name', 'year', 'Total'],)
+movie_release = 2014
+
+label_df = pl.DataFrame({
+    'year': [movie_release + 1],
+    'Total': [int(famous_name['Total'].max() * 0.9)],
+    'label': [f'Movie release year ({movie_release})']
+})
+
+(
+    ggplot(famous_name, aes(x='year', y='Total'))
+    + geom_line(color='steelblue', size=1)
+    + geom_vline(xintercept=movie_release, linetype='dashed', color='red', size=1)
+    + geom_text(data=label_df, mapping=aes(x='year', y='Total', label='label'),
+                color='red', hjust=0)
+    + scale_x_continuous(format='d')
+    + labs(title="Historical Usage of the Name 'Elsa'", x='Year', y='Count')
+    + theme_light()
+)
+
+```
+
+## QUESTION 3
+
+__Mary, Martha, Peter, and Paul are all Christian names. From 1920 - 2000, compare the name usage of each of the four names in a single chart. What trends do you notice?__  
+
+_In the chart below, we can see that Mary was the most popular name throughout the period, while Martha, Peter, and Paul had relatively lower usage.
+
+After researching the name Paul a little more, I noticed that its popularity increased during the 1950s and 1960s compared to other parts of the graph. One possible reason for this was the Baby Boom in the United States, which caused a significant increase in births during those years. In addition, some famous public figures such as Paul Newman and Paul McCartney may have also contributed to making the name more popular during that time._
+
+```{python}
+# Q3
+
+religious_names = df.filter(
+    (pl.col('name').is_in(['Mary', 'Martha', 'Peter', 'Paul'])) &
+    (pl.col('year') >= 1920) &
+    (pl.col('year') <= 2000)
+).select(['name', 'year', 'Total'])
+
+(ggplot(religious_names, aes(x= 'year', y='Total', color='name'
+))
+ + geom_line(size=1)
+  + scale_x_continuous(format='d')
+  + labs(title="Historical Usage of Christian Names (1920-2000)", x='Year', y='Count')
+  + theme_light()
+  + theme(legend_title=element_blank())
+)
+
+```
+<!-- Make sure at least one of your charts includes reference marks!! -->
