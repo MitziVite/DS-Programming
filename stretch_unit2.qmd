@@ -116,3 +116,18 @@ print(long_result)
 ```
 
 2. __Create another chart that shows the proportion of delays for each reason (Carrier, Security, and Late Aircraft) across all 7 airports. Describe your results.__
+
+_The graph shows that San Diego has the highest proportion of delays for both Late Aircraft and Carrier categories, making it the worst airport overall. Atlanta has the lowest delays in both categories, followed closely by Salt Lake City. Security delays are nearly nonexistent across all airports, and the few that are visible tend to belong to the larger airports. Late Aircraft remains the dominant delay type across all 7 airports._
+```{python}
+(
+  ggplot(long_result.to_pandas(), aes(x="delay_type", y="proportion_delayed", fill="airport_name"))
+  + geom_bar(stat="identity", position="dodge")
+  + coord_flip()
+  + ggsize(800, 400)
+  + labs(
+    title="Proportion of Delayed Flights by Delay Type Across All Airports",
+    x="Delay Type",
+    y="Average Proportion of Delayed Flights"
+  )
+)
+```
