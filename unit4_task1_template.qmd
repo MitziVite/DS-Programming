@@ -1,0 +1,140 @@
+---
+title: "Client Report - Can You Predict That?"
+subtitle: "Unit 4 Task 1"
+author: "Mitzi Vite"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: true
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+execute: 
+  warning: false
+    
+---
+
+```{python}
+import polars as pl
+import numpy as np
+from lets_plot import *
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+# add the additional libraries you need to import for ML here
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+
+LetsPlot.setup_html(isolated_frame=True)
+
+```
+
+
+```{python}
+# import your data here using polars and the URL
+url = "https://raw.githubusercontent.com/byuidatascience/data4dwellings/master/data-raw/dwellings_ml/dwellings_ml.csv"
+dwellings = pl.read_csv(url)
+dwellings.head()
+print(dwellings.columns)
+dwellings.describe()
+
+```
+
+## QUESTION
+
+1. __Take time to get to know your data.__ Based on some initial exploration, identify 3 variables in the dataset you think will have strong predictive ability for determining if a house was built before 1980. Explain/justify the reasoning behind your guesses (for example with plots).
+
+_The variables that I found to be the strongest predictors are:
+
+**Number of Bathrooms (numbaths):** Older homes usually have fewer bathrooms. Looking at the histogram, most homes built before 1980 have 1 or 2 bathrooms, while newer homes are more likely to have 3 or more. This makes the number of bathrooms a good predictor.
+
+**Architectural Style (arcstyle):** The bar chart shows that architectural style is also related to the age of the house. ONE-STORY homes are more common in houses built before 1980, while TWO-STORY homes appear more often in newer homes.
+
+**Garage Type (gartype):** Older homes are more likely to have detached garages (Det) or no garage (None), while newer homes usually have attached garages (Att). This makes garage type another good predictor.
+_
+
+```{python}
+# Optional: code you used to get to know your data
+dwellings_pd = dwellings.to_pandas()
+dwellings_pd["before1980"] = dwellings_pd["before1980"].astype(str)
+(ggplot(dwellings_pd, aes(x="numbaths", fill="before1980"))
+    + geom_histogram(position="dodge")
+    + labs(title="Bathrooms by Construction Era")
+)
+
+
+
+```
+
+```{python}
+dwellings_pd = dwellings.to_pandas()
+dwellings_pd["before1980"] = dwellings_pd["before1980"].astype(str)
+arcstyle_cols = [c for c in dwellings_pd.columns if c.startswith('arcstyle_')]
+arcstyle_long = dwellings_pd.melt(
+  id_vars=['before1980'],
+  value_vars=arcstyle_cols,
+  var_name='arcstyle',
+  value_name='indicator'
+)
+
+
+(ggplot(arcstyle_long.query('indicator == 1'), aes(x='arcstyle', fill='before1980'))
+  + geom_bar(position='dodge')
+  + labs(title='Architectural Style by Construction Era')
+)
+```
+```{python}
+dwellings_pd = dwellings.to_pandas()
+dwellings_pd["before1980"] = dwellings_pd["before1980"].astype(str)
+gartype_cols = [c for c in dwellings_pd.columns if c.startswith('gartype_')]
+gartype_long = dwellings_pd.melt(
+  id_vars=['before1980'],
+  value_vars=gartype_cols,
+  var_name='gartype',
+  value_name='indicator'
+)
+
+
+(ggplot(gartype_long.query('indicator == 1'), aes(x='gartype', fill='before1980'))
+  + geom_bar(position='dodge')
+  + labs(title='Garage Type by Construction Era')
+)
+```
+
+1. __Build a classification model labeling houses as being built “before 1980” or “during or after 1980”.__ Your goal is to reach or exceed 90% accuracy. Report your final model choice and any other model parameters you may have tweaked (train-test split ratio, tuning parameters, etc).  
+
+I chose a Random Forest Classifier because it works well with a large number of variables. It also does not require feature normalization and helps reduce overfitting by combining the predictions from multiple decision trees.
+
+I split the data using an 80/20 train-test ratio with a random_state of 42 so I could get the same results every time I ran the model. I also removed the **yrbuilt** column because it was causing data leakage. When I included it, the model got 100% accuracy, which meant it already had the answer instead of actually learning from the other features. After removing it, the model achieved an accuracy of **93.26%**, which is higher than the required **91%**.
+
+```{python}
+# Include and execute your code here
+# Don't forget, you need another import statement to import the desired ML model from sklearn
+dwellings_pd = dwellings.to_pandas()
+y = dwellings_pd['before1980']
+X = dwellings_pd.drop(columns=['parcel', 'before1980','yrbuilt'])
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, 
+    test_size=0.2,
+    random_state=42
+)
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+accuracy = metrics.accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.2%}")
+
+```
+
