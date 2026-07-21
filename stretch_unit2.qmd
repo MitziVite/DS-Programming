@@ -66,7 +66,6 @@ df = df.with_columns([pl.col(col).fill_null(pl.col(col).mean()) for col in num_o
 
 df.head(3)
 ```
-
 ## QUESTION 1
 1. __Which delay is the worst delay? Keep working with the cleaned dataset you created in the previous task. Compare the proportion of flights delayed due to Carrier, to Security, and to Late Aircraft. Show this comparison in a Chart and a Table. Describe your results.__
 
@@ -100,6 +99,7 @@ long_result = long_result.with_columns(
     .str.replace("avg_proportion_delays_security", "Security")
     .str.replace("avg_proportion_delays_late_aircraft", "Late Aircraft")
 )
+
 print(long_result)
 
 (
@@ -114,6 +114,7 @@ print(long_result)
   )
 )
 ```
+
 
 2. __Create another chart that shows the proportion of delays for each reason (Carrier, Security, and Late Aircraft) across all 7 airports. Describe your results.__
 

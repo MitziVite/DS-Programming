@@ -1,0 +1,155 @@
+---
+title: "Client Report - Star Wars for Dummies"
+subtitle: "Unit 5 Task 2"
+author: "Mitzi Vite"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: true
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+execute: 
+  warning: false
+    
+---
+
+```{python}
+import polars as pl 
+import numpy as np
+from lets_plot import *
+import polars.selectors as cs
+# add the additional libraries you need to import for ML here
+
+LetsPlot.setup_html(isolated_frame=True)
+
+data_url = "https://byuidatascience.github.io/DS250-Course-Polars/Data/StarWars_with_emails.csv"
+a = pl.Series(pl.read_csv(data_url, skip_rows=10, n_rows=1, has_header=False, encoding='utf8-lossy').row(0))
+a[2] = "seen_any"
+a = (
+  a.str.replace(r".+seen.+", "seen_")
+   .str.replace(r".+rank.+", "rank_")
+   .str.replace(r"(.+favorably.+)", "fav_")
+   .fill_null(strategy="forward")
+   .str.replace("\uFFFD+", "")
+   .str.strip_chars()
+   .str.to_lowercase()
+   .str.replace_all(" ", "_")
+   .str.replace(r"location(.+)", "location")
+)
+a[3] = "star_wars_fan"
+a[30] = "who_shot_first"
+a[31] = "know_expanded_universe"
+a[32] = "expanded_universe_fan"
+a[33] = "star_trek_fan"
+
+b = pl.Series(pl.read_csv(data_url, skip_rows=11, n_rows=1, has_header=False, encoding='utf8-lossy').row(0))
+b = (
+  b.str.replace(r"Star Wars: (Episode \w+) .+", "${1}")
+   .str.replace("Response", "")
+   .str.replace_all(" ", "_")
+   .fill_null("")
+   .str.strip_chars()
+)
+
+new_names = (a + b).to_list()
+df = pl.read_csv(data_url, skip_rows=12, has_header=False, new_columns=new_names)
+
+```
+
+## QUESTION 1
+1.Filter the dataset to 835 respondents that have seen at least one film (Hint: Don’t use the column Have you seen any of the 6 films in the Star Wars franchise?)
+
+```{python}
+df_seen = df.filter(
+    pl.any_horizontal(cs.starts_with("seen_Episode").is_not_null())
+)
+print(df_seen.shape)
+```
+
+## QUESTION 2
+2.Begin to clean and format the data so that it can be used in a machine learning model. As you format the data, you should complete each item listed below. In your final report provide an excerpt of the reformatted data with a short description of the changes made.
+
+Create a new column that converts the age ranges to a number. Remove the original age range categorical column
+Create a new column that converts the education groupings to a number. Remove the original school categorical column
+Create a new column that converts the income ranges to a number. Remove the original income range categorical column
+Create a new column that converts favorability ratings to a number. Remove the original favorability categorical columns.
+
+
+## TASK 2 - QUESTION 2
+
+```{python}
+
+age_map = {
+    "18-29": 1,
+    "30-44": 2,
+    "45-60": 3,
+    "> 60":  4,
+}
+
+edu_map = {
+    "Less than high school degree":     1,
+    "High school degree":               2,
+    "Some college or Associate degree": 3,
+    "Bachelor degree":                  4,
+    "Graduate degree":                  5,
+}
+
+income_map = {
+    "$0 - $24,999":        1,
+    "$25,000 - $49,999":   2,
+    "$50,000 - $99,999":   3,
+    "$100,000 - $149,999": 4,
+    "$150,000+":           5,
+}
+
+fav_map = {
+    "Very unfavorably":                            1,
+    "Somewhat unfavorably":                        2,
+    "Neither favorably nor unfavorably (neutral)": 3,
+    "Somewhat favorably":                          4,
+    "Very favorably":                              5,
+    "Unfamiliar (N/A)":                            None, 
+}
+
+df_ml = (
+    df_seen
+    
+    .with_columns(
+        pl.col("age")
+          .replace_strict(age_map, default=None, return_dtype=pl.Int64)
+          .alias("age_num"),
+        pl.col("education")
+          .replace_strict(edu_map, default=None, return_dtype=pl.Int64)
+          .alias("education_num"),
+        pl.col("household_income")
+          .replace_strict(income_map, default=None, return_dtype=pl.Int64)
+          .alias("income_num"),
+    )
+
+    .with_columns(
+        cs.starts_with("fav_")
+          .replace_strict(fav_map, default=None, return_dtype=pl.Int64)
+          .name.suffix("_num")
+    )
+    .drop(["age", "education", "household_income"])
+    .drop([c for c in df_seen.columns if c.startswith("fav_")])
+)
+
+df_ml.select(
+    ["respondentid", "age_num", "education_num", "income_num"]
+    + [c for c in df_ml.columns if c.startswith("fav_")][:4]
+).head(5)
+
+```

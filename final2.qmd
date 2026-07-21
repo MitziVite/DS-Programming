@@ -1,0 +1,190 @@
+### Question 1
+```{python}
+import polars as pl
+import numpy as np
+problem = pl.DataFrame({"values": [None, 18, 22, 45, 31, None, 85, 38, 129, 8001, 22, 3]}, strict = False)
+
+mean_value = problem.select(pl.col('values').mean()).item()
+filled_problem = problem.with_columns(pl.col('values').fill_null(mean_value).alias('values'))
+standard_deviation = filled_problem.select(pl.col('values').std()).item()
+print(mean_value)
+print(round(standard_deviation, 2))
+```
+
+
+### Question 2
+
+```{python}
+import polars as pl
+import numpy as np
+from lets_plot import *
+LetsPlot.setup_html(isolated_frame=True)
+```
+
+```{python}
+df =pl.read_csv('names_year_csv.csv')
+df.columns
+df.head()
+ann = (df.filter(pl.col("name") == "Ann")
+    .select([
+        "name",
+        "year",
+        "CO",
+        "AR"
+    ])
+    .sort("year")
+)
+
+
+(
+    (
+    ggplot(ann, aes(x="year"))
+
+    + geom_line(aes(y="CO"), color="orange", size=1)
+    + geom_line(aes(y="AR"), color="blue", size=1)
+    + geom_vline(xintercept=1968, color="black")
+    # + annotate("text", x=1968, label="1968 Year", vjust=-1)
+    + labs(
+        title="The history of Ann for Colorado (orange) and Arizona (blue)",
+        x="Year name given",
+        y="Count of Ann"
+    )
+    + theme_light()
+)
+)
+```
+
+
+### Question 3
+```{python}
+import polars as pl
+
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import metrics
+```
+
+```{python}
+url = "https://raw.githubusercontent.com/byuidatascience/data4dwellings/master/data-raw/dwellings_ml/dwellings_ml.csv"
+dwellings = pl.read_csv(url)
+```
+
+
+```{python}
+dwellings = dwellings.with_columns(
+    (pl.col("nocars") > 2)
+    .cast(pl.Int64)
+    .alias("many_cars")
+)
+```
+
+```{python}
+X = dwellings.drop([
+    "parcel",
+    "nocars",
+    "many_cars"
+])
+
+y = dwellings.get_column("many_cars")
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.30,
+    random_state=2021
+)
+
+
+model = DecisionTreeClassifier(
+    random_state=2021
+)
+
+model.fit(
+    X_train,
+    y_train
+)
+
+
+predictions = model.predict(
+    X_test
+)
+
+accuracy = metrics.accuracy_score(
+    y_test,
+    predictions
+)
+
+print(round(accuracy, 2))
+
+```
+
+### Question 4
+```{python}
+import polars as pl
+from lets_plot import *
+
+LetsPlot.setup_html(isolated_frame=True)
+
+url = (
+    "http://raw.githubusercontent.com/byuidatascience/data_fivethirtyeight_starwars/master/survey_wide_all.csv"
+)
+
+starwars = pl.read_csv(url)
+
+
+fan_starwars = (
+    starwars
+    .select([
+        "gender",
+        "fan_yn"
+    ])
+    .filter(
+        pl.col("gender").is_not_null()
+    )
+    .with_columns(
+        (
+            pl.col("fan_yn")
+            == "Yes"
+        )
+        .alias("a_fan")
+    )
+)
+
+fan_proportion = (
+    fan_starwars
+    .group_by("gender")
+    .agg(
+        pl.col("a_fan")
+        .mean()
+        .alias("proportion")
+    )
+    .sort("gender")
+)
+
+print(
+    fan_proportion.with_columns(
+        pl.col("proportion").round(2)
+    )
+)
+(
+    ggplot(
+        fan_proportion,
+        aes(
+            x="gender",
+            y="proportion",
+            fill="gender"
+        )
+    )
+    + geom_bar(stat="identity")
+    + labs(
+        title="A real fan of Star Wars by Gender",
+        x="Gender",
+        y="Proportion",
+        fill="Gender"
+    )
+    
+    + theme_light()
+)
+```
+
+

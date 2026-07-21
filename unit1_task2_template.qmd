@@ -64,16 +64,14 @@ label_df = pl.DataFrame({
 (
     ggplot(mitzi, aes(x='year', y='Total'))
     + geom_line(color='steelblue', size=1)
-    + geom_vline(xintercept=birth_year, linetype='dashed', color='red', size=1)
+    # + geom_vline(xintercept=birth_year, linetype='dashed', color='red', size=1)
     + geom_text(data=label_df, mapping=aes(x='year', y='Total', label='label'),
                 color='red', hjust=0)
-    + scale_x_continuous(format='d')
+    # + scale_x_continuous(format='d')
     + labs(title="Historical Usage of the Name 'Mitzi'", x='Year', y='Count')
     + theme_light()
 )
 ```
-
-
 ## QUESTION 2
 
 __Think of a unique name from a famous movie. Plot the usage of that name and see how changes line up with the movie release. Does it look like the movie had an effect on usage?__  

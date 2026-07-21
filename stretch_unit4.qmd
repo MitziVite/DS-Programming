@@ -1,0 +1,126 @@
+---
+title: "Regression ML"
+subtitle: "Unit 4 Stretch Task"
+author: "Mitzi Vite"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: true
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+execute: 
+  warning: false
+    
+---
+
+```{python}
+import polars as pl
+import numpy as np
+from lets_plot import *
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+# add the additional libraries you need to import for ML here
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.inspection import permutation_importance
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+LetsPlot.setup_html(isolated_frame=True)
+```
+
+```{python}
+# import your data here using polars and the URL
+url_dwellings_neighborhoods_ml = 'http://raw.githubusercontent.com/byuidatascience/data4dwellings/master/data-raw/dwellings_neighborhoods_ml/dwellings_neighborhoods_ml.csv'
+url_dwelling_ml = 'https://raw.githubusercontent.com/byuidatascience/data4dwellings/master/data-raw/dwellings_ml/dwellings_ml.csv'
+```
+
+## QUESTION 1
+1. Join the dwellings_neighborhoods_ml.csv data to the dwelling_ml.csv on the parcel column to create a new dataset. Duplicate the code for the model you recommended in the previous task above and update it to use this data. Explain the differences and if this changes the model you recomend to the Client.
+
+I joined **dwellings_neighborhoods_ml.csv** with **dwellings_ml.csv** using the **parcel** column. This gave me a dataset with more information, including neighborhood data. Adding this information helped the model make better predictions because homes in the same neighborhood were often built around the same time.
+
+Looking at the results, the Random Forest model achieved an accuracy of **96.82%** with the combined dataset, compared to **93.30%** without the neighborhood data. That is an improvement of **3.52 percentage points**.
+
+This does not change my recommendation. I would still choose the **Random Forest** model, but I would train it using the combined dataset because it gives better results for predicting which homes may contain asbestos.
+
+
+```{python}
+neighborhoods = pl.read_csv(url_dwellings_neighborhoods_ml)
+dwellings = pl.read_csv(url_dwelling_ml)
+dwellings_joined = dwellings.join(
+    neighborhoods,
+    on="parcel",
+    how="inner" 
+)
+
+print(dwellings_joined.columns)
+
+
+
+dwellings_pd = dwellings_joined.to_pandas()
+y = dwellings_pd['before1980']
+X = dwellings_pd.drop(columns=['parcel', 'before1980','yrbuilt'])
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, 
+    test_size=0.2,
+    random_state=42
+)
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+accuracy = metrics.accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.2%}")
+
+
+```
+
+## QUESTION 2
+2. Can you build a model that predicts the year a house was built? Note this is a regression ML model, not a classifier. Report appropriate evaluation metrics for the model. Explain the model and the evaluation metrics you used to determine if the model is good.
+
+I built a **Random Forest Regressor** to predict the year a house was built. The main difference between a **Random Forest Classifier** and a **Random Forest Regressor** is what they predict. A Classifier predicts categories, like 0 or 1, while a Regressor predicts numerical values.
+
+For this problem, the target variable is the construction year, so this is a regression problem. The model uses many decision trees, and each tree predicts a year. Then, it averages all the predictions to estimate the final construction year.
+
+To evaluate the model, I used three metrics: **MAE**, **RMSE**, and **R²**. The **MAE (Mean Absolute Error)** tells me the average error in years, so a smaller value means the predictions are closer to the real year. The **RMSE (Root Mean Squared Error)** also measures the prediction error in years, but it gives more importance to larger errors. The **R² (R-squared)** shows how well the model explains the variation in the data. The closer the value is to 1, the better the model fits the data.
+
+The model achieved a **MAE of 6.36 years**, an **RMSE of 13.02 years**, and an **R² of 0.878**. This means the model predicts the construction year within about **6 years on average** and explains about **87.8%** of the variation in the data. These results show that the model does a good job predicting the year a house was built.
+
+
+```{python}
+dwellings_pd = dwellings_joined.to_pandas()
+y = dwellings_pd['yrbuilt']
+X = dwellings_pd.drop(columns=['parcel', 'before1980','yrbuilt'])
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, 
+    test_size=0.2,
+    random_state=42
+)
+model = RandomForestRegressor()
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+
+mae = metrics.mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(metrics.mean_squared_error(y_test, y_pred))
+r2 = metrics.r2_score(y_test, y_pred)
+
+print(f"MAE:  {mae:.2f} years")
+print(f"RMSE: {rmse:.2f} years")
+print(f"R²:   {r2:.4f}")
+
+```

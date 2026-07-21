@@ -1,0 +1,383 @@
+---
+title: "Client Report - Star Wars for Dummies"
+subtitle: "Unit 5 Task 3"
+author: "Mitzi Vite"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: true
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+execute: 
+  warning: false
+    
+---
+
+```{python}
+import polars as pl 
+import numpy as np
+from lets_plot import *
+import polars.selectors as cs
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+LetsPlot.setup_html(isolated_frame=True)
+
+data_url = "https://byuidatascience.github.io/DS250-Course-Polars/Data/StarWars_with_emails.csv"
+```
+
+<!-- The first 10 rows are not part of the datset we need.
+
+The columns headers are split across two rows. We need to clean and simplify the column headers-->
+
+```{python}
+# Read in and tidy up the first row
+a = pl.Series(pl.read_csv(data_url, skip_rows = 10, n_rows=1, has_header=False, encoding = 'utf8-lossy').row(0))
+a[2] = "seen_any" #simply overwrite the value at index 2
+
+# Rather than changing each column header manually,
+# here we use regex to apply changes more efficiently
+a = (
+  a.str.replace(r".+seen.+", "seen_")
+   .str.replace(r".+rank.+", "rank_")
+   .str.replace(r"(.+favorably.+)", "fav_")
+   .fill_null(strategy = "forward")
+   .str.replace("\uFFFD+", "") #this gets rid of the question marks in a diamond characters 
+   .str.strip_chars()
+   .str.to_lowercase()
+   .str.replace_all(" ", "_")
+   .str.replace(r"location(.+)", "location")
+)
+a[3] = "star_wars_fan"
+a[30] = "who_shot_first"
+a[31] = "know_expanded_universe"
+a[32] = "expanded_universe_fan"
+a[33] = "star_trek_fan"
+```
+
+<!-- Combine series q and a into one series to be used as column names-->
+
+```{python}
+b = pl.Series(pl.read_csv(data_url, skip_rows = 11, n_rows=1, has_header=False, encoding = 'utf8-lossy').row(0))
+
+b = (
+  b.str.replace(r"Star Wars: (Episode \w+) .+", "${1}")
+   .str.replace("Response", "")
+   .str.replace_all(" ", "_")
+   .fill_null("")
+   .str.strip_chars()
+)
+```
+
+```{python}
+#Now combine the two series, each of which contains part of the desired column header
+new_names = (a + b).to_list()
+
+# Read in the data, skipping over the column header rows
+df = pl.read_csv(data_url, skip_rows=12, has_header=False, new_columns = new_names )
+```
+
+
+## Executive Summary
+
+**Stretch completed: YES.** Both article visuals were recreated to validate the
+dataset (see the Methods section).
+
+- **Problem.** The client wanted to use the Star Wars survey in two different ways. First, they wanted to create a clean email contact list for future marketing campaigns. Second, they wanted to build a machine learning model that could predict whether a respondent earns at least $50,000 per year based on their survey responses.
+- **Data.** This project used the FiveThirtyEight Star Wars survey, which includes responses from more than 1,000 participants along with fictitious email addresses. After removing respondents who had not seen any Star Wars movies, 835 responses remained for the analysis.
+- **Contact list.** Regular expressions were used to separate each email address into first name, last name, and email domain. This created a clean contact list that the client can easily use for future marketing efforts.
+- **Validation.** To make sure the dataset matched the original FiveThirtyEight survey, two charts from the published article were recreated: Which "Star Wars" Movies Have You Seen? and What's the Best "Star Wars" Movie? The percentages closely matched the original results, giving confidence that the dataset is accurate.
+- **Prediction.** Several machine learning models were tested, and the Random Forest model performed the best. It predicted whether a respondent earns at least $50,000 per year with an accuracy of 0.640%, which is well above the required 55% accuracy target.
+- **Recommendation.** The model performs well enough to help the client group respondents into broad marketing segments. However, since income information was missing for some participants and the survey is not perfectly representative of the general population, the predictions should be used as a helpful guide rather than as exact classifications.
+
+
+## Methods
+
+### Building the contact list
+
+Each respondent submitted the survey from a unique email. The formats vary
+(`first.last@`, `first_last@`, `lastname1234first@`), so I lowercased the field
+and used regular expressions to pull out a first name, last name, and domain.
+The first/last regex allows any separator (`.`, `_`, `-`) and skips embedded
+digits, and the domain regex captures everything after the `@`.
+
+```{python}
+df = df.with_columns(
+    pl.col("email").str.to_lowercase().str.strip_chars().alias("email_clean")
+).with_columns(
+    pl.col("email_clean")
+      .str.extract(r"^([a-z]+)(?:[._-]+[a-z]+)*[._-]+([a-z]+)@", group_index=1)
+      .str.to_titlecase().alias("first_name"),
+    pl.col("email_clean")
+      .str.extract(r"^([a-z]+)(?:[._-]+[a-z]+)*[._-]+([a-z]+)@", group_index=2)
+      .str.to_titlecase().alias("last_name"),
+    pl.col("email_clean")
+      .str.extract(r"@(.+)$", group_index=1)
+      .alias("email_domain"),
+)
+
+df.select(["email", "first_name", "last_name", "email_domain"]).head(5)
+```
+
+### Filtering to respondents who saw a film
+
+The instructions warn against trusting the "have you seen any" column. Instead I
+kept respondents who marked at least one of the six individual movie columns.
+This yields the 835 respondents the article is based on.
+
+```{python}
+df_seen = df.filter(
+    pl.any_horizontal(cs.starts_with("seen_Episode").is_not_null())
+)
+print(f"Respondents who have seen at least one film: {df_seen.height}")
+```
+
+### Encoding the categorical variables
+
+Four survey variables have a natural order, so I used **ordinal encoding**
+(mapping each category to an integer that preserves the order) rather than
+one-hot encoding, which would throw away that ordering:
+
+- **Age**: 18-29 -> 1 up to > 60 -> 4
+- **Education**: less than high school -> 1 up to graduate degree -> 5
+- **Income**: $0-$24,999 -> 1 up to $150,000+ -> 5
+- **Character favorability**: very unfavorably -> 1 up to very favorably -> 5
+
+For favorability, "Unfamiliar (N/A)" was mapped to null rather than a number,
+because not knowing a character is not a point on the like/dislike scale.
+`replace_strict` guarantees any unexpected value becomes null instead of
+silently passing through.
+
+```{python}
+age_map = {"18-29": 1, "30-44": 2, "45-60": 3, "> 60": 4}
+edu_map = {
+    "Less than high school degree": 1,
+    "High school degree": 2,
+    "Some college or Associate degree": 3,
+    "Bachelor degree": 4,
+    "Graduate degree": 5,
+}
+income_map = {
+    "$0 - $24,999": 1,
+    "$25,000 - $49,999": 2,
+    "$50,000 - $99,999": 3,
+    "$100,000 - $149,999": 4,
+    "$150,000+": 5,
+}
+fav_map = {
+    "Very unfavorably": 1,
+    "Somewhat unfavorably": 2,
+    "Neither favorably nor unfavorably (neutral)": 3,
+    "Somewhat favorably": 4,
+    "Very favorably": 5,
+    "Unfamiliar (N/A)": None,
+}
+
+df_ml = (
+    df_seen
+    .with_columns(
+        pl.col("age").replace_strict(age_map, default=None, return_dtype=pl.Int64).alias("age_num"),
+        pl.col("education").replace_strict(edu_map, default=None, return_dtype=pl.Int64).alias("education_num"),
+        pl.col("household_income").replace_strict(income_map, default=None, return_dtype=pl.Int64).alias("income_num"),
+    )
+    .with_columns(
+        cs.starts_with("fav_").replace_strict(fav_map, default=None, return_dtype=pl.Int64).name.suffix("_num")
+    )
+    .drop(["age", "education", "household_income"])
+    .drop([c for c in df_seen.columns if c.startswith("fav_")])
+)
+
+df_ml.select(
+    ["age_num", "education_num", "income_num"]
+    + [c for c in df_ml.columns if c.startswith("fav_")][:3]
+).head(5)
+```
+
+### Handling missing values
+
+Income information was missing for some respondents, so those rows were removed before training the machine learning model. For the remaining missing values in the ranking and favorability questions, I replaced them with -1. This allowed the model to keep those responses while still recognizing that the respondent did not answer that question.
+
+### Validating the data against the article (Stretch)
+
+To make sure the dataset was the same one used in the original FiveThirtyEight article, I recreated two of the charts from the article. Since my percentages closely matched the published results, I could confirm that the GitHub dataset is the same data used in the original analysis.
+
+```{python}
+titles = {
+    "Episode_I":   "The Phantom Menace",
+    "Episode_II":  "Attack of the Clones",
+    "Episode_III": "Revenge of the Sith",
+    "Episode_IV":  "A New Hope",
+    "Episode_V":   "The Empire Strikes Back",
+    "Episode_VI":  "Return of the Jedi",
+}
+order = list(titles.values())
+
+fivethirtyeight_theme = (
+    theme_minimal()
+    + theme(
+        axis_text_x=element_blank(),
+        axis_ticks=element_blank(),
+        panel_grid=element_blank(),
+        plot_title=element_text(face="bold", size=16),
+        plot_background=element_rect(fill="#f0f0f0"),
+        panel_background=element_rect(fill="#f0f0f0"),
+    )
+)
+```
+
+```{python}
+# Visual 1: Which 'Star Wars' Movies Have You Seen?
+seen_long = (
+    df_seen
+    .select(cs.starts_with("seen_Episode").is_not_null().cast(pl.Int32))
+    .sum()
+    .unpivot(variable_name="movie", value_name="n")
+    .with_columns(
+        pl.col("movie").str.replace("seen_", "").replace_strict(titles).alias("title"),
+        (pl.col("n") / df_seen.height * 100).round(0).cast(pl.Int32).alias("pct"),
+    )
+)
+
+(
+    ggplot(seen_long, aes(x="title", y="pct"))
+    + geom_bar(stat="identity", fill="#008fd5", width=0.7)
+    + geom_text(aes(label="pct"), nudge_y=4, size=7)
+    + coord_flip()
+    + scale_x_discrete(limits=order[::-1])
+    + labs(title="Which 'Star Wars' Movies Have You Seen?",
+           subtitle=f"Of {df_seen.height} respondents who have seen any film",
+           x="", y="")
+    + fivethirtyeight_theme
+    + ggsize(700, 400)
+)
+```
+
+```{python}
+# Visual 2: What's the Best 'Star Wars' Movie?
+saw_all = df_seen.filter(
+    pl.all_horizontal(cs.starts_with("seen_Episode").is_not_null())
+)
+
+best_long = (
+    saw_all
+    .select(cs.starts_with("rank_"))
+    .unpivot(variable_name="movie", value_name="rank")
+    .filter(pl.col("rank") == 1)
+    .group_by("movie")
+    .agg(pl.len().alias("n"))
+    .with_columns(
+        pl.col("movie").str.replace("rank_", "").replace_strict(titles).alias("title"),
+        (pl.col("n") / saw_all.height * 100).round(0).cast(pl.Int32).alias("pct"),
+    )
+)
+
+(
+    ggplot(best_long, aes(x="title", y="pct"))
+    + geom_bar(stat="identity", fill="#008fd5", width=0.7)
+    + geom_text(aes(label="pct"), nudge_y=2, size=7)
+    + coord_flip()
+    + scale_x_discrete(limits=order[::-1])
+    + labs(title="What's the Best 'Star Wars' Movie?",
+           subtitle=f"Of {saw_all.height} respondents who have seen all six films",
+           x="", y="")
+    + fivethirtyeight_theme
+    + ggsize(700, 400)
+)
+```
+
+Both recreations reproduce the article's percentages, so the dataset is
+validated.
+
+
+## Results
+
+### Final preparation for modeling
+
+Before training the model, I removed the ID, name, and email columns because they would not help make predictions. I converted the movie columns into simple **0/1** values to show whether a respondent had seen each movie. I also used one-hot encoding for the remaining text columns, such as gender, region, who shot first, and the yes/no questions.
+
+Next, I created a new target variable called **income_50k**, where **1** means the respondent earns at least $50,000 per year. Finally, I removed the original **income_num** column from the features so the model would not already know the correct answer while making predictions.
+
+
+```{python}
+df_model = (
+    df_ml
+    .filter(pl.col("income_num").is_not_null())
+    .with_columns((pl.col("income_num") >= 3).cast(pl.Int8).alias("income_50k"))
+    .drop(["respondentid", "email", "email_clean",
+           "first_name", "last_name", "email_domain", "income_num"])
+    .with_columns(cs.starts_with("seen_Episode").is_not_null().cast(pl.Int8))
+    .to_dummies(cs.string())
+    .fill_null(-1)
+)
+
+print(f"Rows with known income used for modeling: {df_model.height}")
+df_model.head(5)
+```
+
+### The model and its accuracy
+
+I used a Random Forest model because it works well with this type of data. It can handle both binary and ranked features, does not require the data to be scaled, and usually performs better than a single decision tree. I split the data into **70% for training** and **30% for testing** using a fixed random seed so the results could be reproduced.
+
+
+```{python}
+X = df_model.drop("income_50k")
+y = df_model["income_50k"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=76
+)
+
+clf = RandomForestClassifier(n_estimators=300, random_state=76)
+clf.fit(X_train, y_train)
+
+y_pred = clf.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.3f}")
+```
+
+```{python}
+print(classification_report(y_test, y_pred, target_names=["< $50k", ">= $50k"]))
+```
+
+```{python}
+importances = (
+    pl.DataFrame({"feature": X.columns, "importance": clf.feature_importances_})
+    .sort("importance", descending=True)
+    .head(15)
+)
+
+(
+    ggplot(importances, aes(x="feature", y="importance"))
+    + geom_bar(stat="identity", fill="#008fd5")
+    + coord_flip()
+    + scale_x_discrete(limits=importances["feature"].to_list()[::-1])
+    + labs(title="Top 15 Feature Importances", x="", y="Importance")
+    + theme_minimal()
+    + ggsize(700, 500)
+)
+```
+
+The model achieved an accuracy of **0.640%** on the test data, which is higher than the required 55%. The feature importance chart also shows which survey responses had the biggest impact on the model's predictions.
+
+
+## Conclusion
+
+This project completed all of the client's goals. I created a clean contact list, confirmed that the dataset matched the original FiveThirtyEight survey, and built a machine learning model to predict whether a respondent earns at least $50,000 per year.
+
+- **The contact list is ready.** I extracted the first names, last names, and email domains from each email address, making the contact list ready for future marketing campaigns.
+- **The data is trustworthy.** By recreating two of the original charts, I confirmed that the GitHub dataset matches the data used in the FiveThirtyEight article. This gave me confidence that the data is accurate.
+- **The model performed well.** The Random Forest model achieved an accuracy above the required 55%. However, some income values were missing and had to be removed before training. Also, this survey does not represent the entire population because most respondents were Star Wars fans, and many were younger and male. Because of this, the model's predictions should be used as a guide instead of an exact answer.
+- **Recommendation / future work.** The model could likely be improved by testing different model settings, trying other machine learning models such as Gradient Boosting, or finding a better way to handle the missing income values. Before using the model in a real marketing campaign, the client should also make sure that their target audience is similar to the people who answered the survey.

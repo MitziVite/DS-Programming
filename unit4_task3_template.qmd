@@ -1,0 +1,229 @@
+---
+title: "Client Report - Show me!"
+subtitle: "Unit 4 Task 3"
+author: "Mitzi Vite"
+format:
+  html:
+    self-contained: true
+    page-layout: full
+    title-block-banner: true
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: false
+    html-math-method: katex
+    code-fold: true
+    code-summary: "Show the code"
+    code-overflow: wrap
+    code-copy: hover
+    code-tools:
+        source: false
+        toggle: true
+        caption: See code
+execute: 
+  warning: false
+    
+---
+
+```{python}
+import polars as pl
+import numpy as np
+from lets_plot import *
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+# add the additional libraries you need to import for ML here
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.inspection import permutation_importance
+import pandas as pd
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+
+LetsPlot.setup_html(isolated_frame=True)
+
+```
+
+
+```{python}
+# import your data here using polars and the URL
+url = "https://raw.githubusercontent.com/byuidatascience/data4dwellings/master/data-raw/dwellings_ml/dwellings_ml.csv"
+dwellings = pl.read_csv(url)
+dwellings.head()
+print(dwellings.columns)
+dwellings.describe()
+
+```
+
+## QUESTION 1
+
+1. __Repeat the classification exercise using 2 different algorithms/models. Explain the differences between the 3 models__ (your original one, and the 2 new ones for this task).
+
+I trained and compared three classification models: Decision Tree, Random Forest, and Gradient Boosting.
+
+A Decision Tree makes predictions by following one path of decisions, which makes it easy to understand, but it can be less accurate. Random Forest improves this by using many decision trees and combining their results, which helps reduce errors. Gradient Boosting also uses multiple trees, but each tree tries to fix the mistakes from the previous one.
+
+Looking at the results, Random Forest had the highest accuracy with **93.30%**. Gradient Boosting had **90.25%**, and Decision Tree had **90.12%**.
+
+
+```{python}
+# Include and execute your code here
+
+dwellings_pd = dwellings.to_pandas()
+y = dwellings_pd['before1980']
+X = dwellings_pd.drop(columns=['parcel', 'before1980','yrbuilt'])
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, 
+    test_size=0.2,
+    random_state=42
+)
+
+
+
+
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+accuracy = metrics.accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.2%}")
+
+```
+
+```{python}
+model_dt = DecisionTreeClassifier(random_state=42)
+model_dt.fit(X_train, y_train)
+y_pred_dt = model_dt.predict(X_test)
+accuracy_dt = metrics.accuracy_score(y_test, y_pred_dt)
+print(f"Decision Tree Accuracy: {accuracy_dt:.2%}")
+```
+
+
+```{python}
+model_gb = GradientBoostingClassifier(random_state=42)
+model_gb.fit(X_train, y_train)
+y_pred_gb = model_gb.predict(X_test)
+accuracy_gb = metrics.accuracy_score(y_test, y_pred_gb)
+print(f"Gradient Boosting Accuracy: {accuracy_gb:.2%}")
+```
+
+
+
+## QUESTION 2
+
+1. For each model (your original one, and the 2 new ones for this task), display the classification report and the permutation importances for the most important features.  Discuss which model you would recommend to the Client and why.
+
+I would recommend the **Random Forest** model. It had the highest accuracy at **93.30%**, while **Gradient Boosting** reached **90.25%** and **Decision Tree** reached **90.12%**.
+
+I think precision is the most important metric for this problem because the goal is to identify homes that may contain asbestos. If the model makes the wrong prediction, people could be exposed to a serious health risk. Since Random Forest had the best overall performance, I think it is the best choice for the client.
+
+
+```{python}
+# Include and execute your code here
+# === RANDOM FOREST ===
+print("=== Random Forest ===")
+print(metrics.classification_report(y_test, y_pred))
+
+result_rf = permutation_importance(
+    model, 
+    X_test, 
+    y_test, 
+    n_repeats=10, 
+    random_state=42
+)
+
+top_rf = (
+    pd.DataFrame({
+        "feature": X_test.columns,
+        "importance": result_rf.importances_mean
+    })
+    .sort_values("importance", ascending=False)
+    .head(10)
+)
+
+print(top_rf)
+
+(
+    ggplot(top_rf.sort_values("importance"), aes(x="feature", y="importance"))
+    + geom_bar(stat="identity")
+    + coord_flip()
+    + labs(
+        title="Random Forest - Top 10 Permutation Importances",
+        x="Feature",
+        y="Importance"
+    )
+)
+```
+
+
+```{python}
+# === DECISION TREE ===
+print("=== Decision Tree ===")
+print(metrics.classification_report(y_test, y_pred_dt))
+
+result_dt = permutation_importance(
+    model_dt, 
+    X_test, 
+    y_test, 
+    n_repeats=10, 
+    random_state=42
+)
+
+top_dt = (
+    pd.DataFrame({
+        "feature": X_test.columns,
+        "importance": result_dt.importances_mean
+    })
+    .sort_values("importance", ascending=False)
+    .head(10)
+)
+
+print(top_dt)
+
+(
+    ggplot(top_dt.sort_values("importance"), aes(x="feature", y="importance"))
+    + geom_bar(stat="identity")
+    + coord_flip()
+    + labs(
+        title="Decision Tree - Top 10 Permutation Importances",
+        x="Feature",
+        y="Importance"
+    )
+)
+```
+
+```{python}
+# === GRADIENT BOOSTING ===
+print("=== Gradient Boosting ===")
+print(metrics.classification_report(y_test, y_pred_gb))
+
+result_gb = permutation_importance(
+    model_gb, 
+    X_test, 
+    y_test, 
+    n_repeats=10, 
+    random_state=42
+
+)
+
+top_gb = (
+    pd.DataFrame({
+        "feature": X_test.columns,
+        "importance": result_gb.importances_mean
+    })
+    .sort_values("importance", ascending=False)
+    .head(10)
+)
+
+print(top_gb)
+
+(
+    ggplot(top_gb.sort_values("importance"), aes(x="feature", y="importance"))
+    + geom_bar(stat="identity")
+    + coord_flip()
+    + labs(
+        title="Gradient Boosting - Top 10 Permutation Importances",
+        x="Feature",
+        y="Importance"
+    )
+)
+```

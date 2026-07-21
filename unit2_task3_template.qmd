@@ -27,10 +27,11 @@ execute:
 
 ```{python}
 import polars as pl
-import requests #new for reading in JSON
-import io       #new for reading in JSON
 import numpy as np
 from lets_plot import *
+import requests #new for reading in JSON
+import io       #new for reading in JSON
+
 
 LetsPlot.setup_html(isolated_frame=True)
 ```
@@ -42,6 +43,8 @@ response = requests.get(url)
 df = pl.read_json(io.BytesIO(response.content))
 print(df.describe())
 ```
+
+
 
 ## QUESTION 1
 
@@ -87,8 +90,10 @@ print(df.filter(pl.col("month").is_null()).head(1).write_json())
 
 ```
 
-## QUESTION 2
 
+
+## QUESTION 2
+fill_null
 2. __Filling in missing data__ For all the "minutes_delayed" columns, fill in any missing values with the median of that column. For the "num_of" columns, fill in missing values with that column's mean.
 
 _Nothing to write/report for this question_
@@ -106,7 +111,8 @@ df = df.with_columns(
 )
 
 df = df.with_columns(
-    [pl.col(col).fill_null(pl.col(col).median()) for col in minute_cols]
+   
+    [pl.col(col).(pl.col(col).median()) for col in minute_cols]
 )
 
 df = df.with_columns(
